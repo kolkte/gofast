@@ -1,0 +1,8 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="gofast.csproj">
+    <Platform Project="x86" />
+  </Project>
+</Solution>

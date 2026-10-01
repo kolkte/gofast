@@ -1,0 +1,11 @@
+{
+  "Author": "kolkte",
+  "Name": "XIVSpeedTrainer",
+  "Punchline": "Movement speed trainer",
+  "Description": "Adjusts player movement speed.",
+  "InternalName": "XIVSpeedTrainer",
+  "AssemblyVersion": "0.0.0.1",
+  "RepoUrl": "https://github.com/kolkte/gofast",
+  "ApplicableVersion": "any",
+  "Tags": [ "speed" ]
+}

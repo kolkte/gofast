@@ -3,15 +3,15 @@ using Dalamud.Interface.Colors;
 using Dalamud.Interface.Windowing;
 using System;
 using System.Numerics;
-using XIVSpeedTrainer.Enums;
-using XIVSpeedTrainer.Helpers;
 
 namespace XIVSpeedTrainer.Windows;
 
 public class MainWindow : Window, IDisposable
 {
     private readonly Plugin _plugin;
-    private IntPtr _hProcess;
+
+    private static readonly float[] Rates = { 1.0f, 1.05f, 1.15f, 3.0f, 9.99f };
+    private static readonly string[] OptionLabels = { "1.00", "1.05", "1.15", "3.00", "9.99" };
 
     public MainWindow(Plugin plugin) : base("XIVSpeedTrainer")
     {
@@ -25,34 +25,25 @@ public class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
-        if (_hProcess == IntPtr.Zero)
-        {
-            var hwnd = Win32.GetGameHwnd();
-            _hProcess = Win32.GetProcessHandle(hwnd);
-            if (_hProcess != IntPtr.Zero)
-                SingletonThreadHelper.InitThread(_hProcess);
-        }
-
         ImGui.TextColored(ImGuiColors.HealerGreen, "Tool for testing purposes.");
         ImGui.SameLine();
-        ImGui.Text($"Current speed rate: {Constants.GetSelectedOption(_plugin.Configuration.SelectedSpeedOption):F2}");
+        ImGui.Text($"Current speed rate: {Rates[_plugin.Configuration.SelectedSpeedOption]:F2}");
         ImGui.Separator();
 
-        for (var i = 0; i < Constants.OptionLabels.Length; i++)
+        for (var i = 0; i < OptionLabels.Length; i++)
         {
             var isSelected = _plugin.Configuration.SelectedSpeedOption == i;
-            if (ImGui.RadioButton(Constants.OptionLabels[i], isSelected))
+            if (ImGui.RadioButton(OptionLabels[i], isSelected))
             {
                 _plugin.Configuration.SelectedSpeedOption = i;
+                _plugin.Configuration.MovementSpeedMultiplier = Rates[i];
+                _plugin.Configuration.EnableMovementSpeedHack = true;
                 _plugin.Configuration.Save();
-                SingletonThreadHelper.SetRate(Constants.GetSelectedOption(i));
+                _plugin.ApplyMultiplier(Rates[i]);
             }
             ImGui.SameLine();
         }
     }
 
-    public void Dispose()
-    {
-        SingletonThreadHelper.Dispose();
-    }
+    public void Dispose() { }
 }

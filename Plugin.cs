@@ -1,85 +1,123 @@
 ﻿using Dalamud.Game.Command;
-using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using System.Numerics;
-using XIVSpeedTrainer.Helpers;
-using XIVSpeedTrainer.Windows;
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
 
 namespace XIVSpeedTrainer;
 
 public sealed class Plugin : IDalamudPlugin
 {
-    public string Name => "XIVSpeedTrainer";
-
-    private const string CommandName = "/xst";
-
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
+    [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
-    [PluginService] internal static IObjectTable ObjectTable { get; private set; } = null!;
-    [PluginService] internal static IFramework Framework { get; private set; } = null!;
+
+    public string Name => "XIVSpeedTrainer";
+    private const string CommandName = "/movespeed";
+    private const long SpeedHookOffset = 0x182BC5F;
 
     public Configuration Configuration { get; init; }
-    private readonly WindowSystem _windowSystem = new("XIVSpeedTrainer");
-    private readonly MainWindow _mainWindow;
+    private bool _hookInitialized;
 
-    // Track whether the player is currently moving. Set by the Framework update.
+    // Kept for the old SingletonThreadHelper. The new hook doesn't use it.
     public static volatile bool IsPlayerMoving = false;
-    private Vector3 _lastPosition = Vector3.Zero;
+
+    [DllImport("SpeedHook.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern bool InitializeHook(IntPtr baseAddress, IntPtr offset);
+
+    [DllImport("SpeedHook.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void SetMultiplier(float multiplier);
+
+    [DllImport("SpeedHook.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void ShutdownHook();
 
     public Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
-        _mainWindow = new MainWindow(this);
-        _windowSystem.AddWindow(_mainWindow);
-
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Opens the XIVSpeedTrainer window."
+            HelpMessage = "Format: /movespeed <multiplier>. Example: /movespeed 1.5"
         });
 
-        PluginInterface.UiBuilder.Draw += _windowSystem.Draw;
-        PluginInterface.UiBuilder.OpenMainUi += () => _mainWindow.IsOpen = true;
-
-        // Hook the framework update so we can track player movement each frame.
-        Framework.Update += OnFrameworkUpdate;
-
-        // Apply the last saved speed setting.
-        SingletonThreadHelper.SetRate(Enums.Constants.GetSelectedOption(Configuration.SelectedSpeedOption));
-
-        Log.Information("XIVSpeedTrainer loaded.");
-    }
-
-    private void OnFrameworkUpdate(IFramework framework)
-    {
-        var player = ObjectTable.LocalPlayer;
-        if (player == null)
+        try
         {
-            IsPlayerMoving = false;
-            return;
-        }
+            var dllPath = Path.Combine(PluginInterface.AssemblyLocation.DirectoryName!, "SpeedHook.dll");
+            if (!File.Exists(dllPath))
+            {
+                Log.Error($"SpeedHook.dll not found at {dllPath}");
+                return;
+            }
 
-        var current = player.Position;
-        // Compare squared distance to avoid an expensive sqrt.
-        // Threshold chosen so that minor positional jitter (e.g., from animations) doesn't count.
-        IsPlayerMoving = Vector3.DistanceSquared(current, _lastPosition) > 0.0001f;
-        _lastPosition = current;
+            var baseAddress = (nint)Process.GetCurrentProcess().MainModule!.BaseAddress;
+            bool ok = InitializeHook(baseAddress, (IntPtr)SpeedHookOffset);
+
+            if (!ok)
+            {
+                Log.Error("InitializeHook returned false");
+                return;
+            }
+
+            _hookInitialized = true;
+            SetMultiplier(Configuration.MovementSpeedMultiplier);
+            Log.Information($"SpeedHook initialized. Base=0x{baseAddress:X} Offset=0x{SpeedHookOffset:X}");
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Failed to init SpeedHook: {ex.Message}");
+        }
     }
 
     private void OnCommand(string command, string args)
     {
-        _mainWindow.IsOpen = true;
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            ChatGui.PrintError("Format: /movespeed <multiplier>");
+            return;
+        }
+
+        if (float.TryParse(args.Trim(), out var multiplier))
+        {
+            if (multiplier < 0.1f || multiplier > 10f)
+            {
+                ChatGui.PrintError("Multiplier must be between 0.1 and 10.0");
+                return;
+            }
+
+            Configuration.MovementSpeedMultiplier = multiplier;
+            Configuration.EnableMovementSpeedHack = true;
+            Configuration.Save();
+
+            ApplyMultiplier(multiplier);
+
+            ChatGui.Print($"Movement speed multiplier set to {multiplier}");
+        }
+        else
+        {
+            ChatGui.PrintError("Invalid multiplier.");
+        }
+    }
+
+    /// <summary>
+    /// Pushes the multiplier into the native SpeedHook. Called by both the chat
+    /// command and the UI radio buttons.
+    /// </summary>
+    internal void ApplyMultiplier(float multiplier)
+    {
+        if (_hookInitialized)
+            SetMultiplier(multiplier);
     }
 
     public void Dispose()
     {
-        Framework.Update -= OnFrameworkUpdate;
-        PluginInterface.UiBuilder.Draw -= _windowSystem.Draw;
-        _windowSystem.RemoveAllWindows();
-        _mainWindow.Dispose();
+        if (_hookInitialized)
+        {
+            try { ShutdownHook(); } catch { }
+        }
         CommandManager.RemoveHandler(CommandName);
     }
 }

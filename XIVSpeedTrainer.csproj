@@ -18,10 +18,9 @@
 		<Tags>speed</Tags>
 	</PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="DalamudPackager" Version="11.0.0">
-			<PrivateAssets>all</PrivateAssets>
-			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-		</PackageReference>
-	</ItemGroup>
+	<Target Name="CopyNativeDll" AfterTargets="Build">
+		<Copy SourceFiles="$(SolutionDir)SpeedHook\bin\x64\$(Configuration)\SpeedHook.dll"
+			  DestinationFolder="$(OutputPath)"
+			  Condition="Exists('$(SolutionDir)SpeedHook\bin\x64\$(Configuration)\SpeedHook.dll')" />
+	</Target>
 </Project>

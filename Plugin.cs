@@ -1,4 +1,5 @@
 ﻿using Dalamud.Game.Command;
+using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -6,6 +7,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using XIVSpeedTrainer.Windows;
 
 namespace XIVSpeedTrainer;
 
@@ -23,8 +25,9 @@ public sealed class Plugin : IDalamudPlugin
     public Configuration Configuration { get; init; }
     private bool _hookInitialized;
 
-    // Kept for the old SingletonThreadHelper. The new hook doesn't use it.
-    public static volatile bool IsPlayerMoving = false;
+    // Add these for the UI
+    public readonly WindowSystem WindowSystem = new("XIVSpeedTrainer");
+    private MainWindow? _mainWindow;
 
     [DllImport("SpeedHook.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern bool InitializeHook(IntPtr baseAddress, IntPtr offset);
@@ -39,9 +42,17 @@ public sealed class Plugin : IDalamudPlugin
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
+        // Initialize the UI
+        _mainWindow = new MainWindow(this);
+        WindowSystem.AddWindow(_mainWindow);
+
+        PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
+        PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
+        PluginInterface.UiBuilder.OpenMainUi += ToggleConfigUi;
+
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Format: /movespeed <multiplier>. Example: /movespeed 1.5"
+            HelpMessage = "Toggles the XIVSpeedTrainer window."
         });
 
         try
@@ -63,7 +74,8 @@ public sealed class Plugin : IDalamudPlugin
             }
 
             _hookInitialized = true;
-            SetMultiplier(Configuration.MovementSpeedMultiplier);
+            // Apply the saved configuration on startup.
+            ApplyMultiplier(Configuration.MovementSpeedMultiplier);
             Log.Information($"SpeedHook initialized. Base=0x{baseAddress:X} Offset=0x{SpeedHookOffset:X}");
         }
         catch (Exception ex)
@@ -74,37 +86,17 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string args)
     {
-        if (string.IsNullOrWhiteSpace(args))
-        {
-            ChatGui.PrintError("Format: /movespeed <multiplier>");
-            return;
-        }
+        // The command now simply toggles the window.
+        ToggleConfigUi();
+    }
 
-        if (float.TryParse(args.Trim(), out var multiplier))
-        {
-            if (multiplier < 0.1f || multiplier > 10f)
-            {
-                ChatGui.PrintError("Multiplier must be between 0.1 and 10.0");
-                return;
-            }
-
-            Configuration.MovementSpeedMultiplier = multiplier;
-            Configuration.EnableMovementSpeedHack = true;
-            Configuration.Save();
-
-            ApplyMultiplier(multiplier);
-
-            ChatGui.Print($"Movement speed multiplier set to {multiplier}");
-        }
-        else
-        {
-            ChatGui.PrintError("Invalid multiplier.");
-        }
+    private void ToggleConfigUi()
+    {
+        _mainWindow?.Toggle();
     }
 
     /// <summary>
-    /// Pushes the multiplier into the native SpeedHook. Called by both the chat
-    /// command and the UI radio buttons.
+    /// Pushes the multiplier into the native SpeedHook. Called by the UI.
     /// </summary>
     internal void ApplyMultiplier(float multiplier)
     {
@@ -114,6 +106,13 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
+        PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
+        PluginInterface.UiBuilder.OpenMainUi -= ToggleConfigUi;
+
+        WindowSystem.RemoveAllWindows();
+        _mainWindow?.Dispose();
+
         if (_hookInitialized)
         {
             try { ShutdownHook(); } catch { }

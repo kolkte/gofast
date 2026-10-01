@@ -1,4 +1,4 @@
-<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+﻿<Project Sdk="Dalamud.NET.Sdk/15.0.0">
 	<PropertyGroup>
 		<TargetFramework>net10.0-windows7.0</TargetFramework>
 		<LangVersion>latest</LangVersion>
@@ -19,8 +19,6 @@
 	</PropertyGroup>
 
 	<Target Name="CopyNativeDll" AfterTargets="Build">
-		<Copy SourceFiles="$(SolutionDir)SpeedHook\bin\x64\$(Configuration)\SpeedHook.dll"
-			  DestinationFolder="$(OutputPath)"
-			  Condition="Exists('$(SolutionDir)SpeedHook\bin\x64\$(Configuration)\SpeedHook.dll')" />
+		<Copy SourceFiles="$(SolutionDir)SpeedHook\bin\x64\$(Configuration)\SpeedHook.dll" DestinationFolder="$(OutputPath)" Condition="Exists('$(SolutionDir)SpeedHook\bin\x64\$(Configuration)\SpeedHook.dll')" />
 	</Target>
 </Project>

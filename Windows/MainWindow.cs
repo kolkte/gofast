@@ -1,5 +1,4 @@
 ﻿using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.Colors;
 using Dalamud.Interface.Windowing;
 using System;
 using System.Numerics;
@@ -10,39 +9,57 @@ public class MainWindow : Window, IDisposable
 {
     private readonly Plugin _plugin;
 
-    private static readonly float[] Rates = { 1.0f, 1.05f, 1.15f, 3.0f, 9.99f };
-    private static readonly string[] OptionLabels = { "1.00", "1.05", "1.15", "3.00", "9.99" };
-
     public MainWindow(Plugin plugin) : base("XIVSpeedTrainer")
     {
         _plugin = plugin;
+
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(350, 100),
-            MaximumSize = new Vector2(350, 100)
+            MinimumSize = new Vector2(300, 100),
+            MaximumSize = new Vector2(400, 200)
         };
     }
 
     public override void Draw()
     {
-        ImGui.TextColored(ImGuiColors.HealerGreen, "Tool for testing purposes.");
-        ImGui.SameLine();
-        ImGui.Text($"Current speed rate: {Rates[_plugin.Configuration.SelectedSpeedOption]:F2}");
+        // Checkbox to enable/disable the speed hack.
+        var enabled = _plugin.Configuration.EnableMovementSpeedHack;
+        if (ImGui.Checkbox("Enable Speed Hack", ref enabled))
+        {
+            _plugin.Configuration.EnableMovementSpeedHack = enabled;
+
+            // If enabled, apply the saved multiplier. If disabled, apply 1.0f
+            // to the hook to disable the effect, but DO NOT change the saved multiplier.
+            _plugin.ApplyMultiplier(enabled ? _plugin.Configuration.MovementSpeedMultiplier : 1.0f);
+
+            _plugin.Configuration.Save();
+        }
+
         ImGui.Separator();
 
-        for (var i = 0; i < OptionLabels.Length; i++)
+        // Slider for the speed multiplier. This is always interactive.
+        var multiplier = _plugin.Configuration.MovementSpeedMultiplier;
+        if (ImGui.SliderFloat("Speed Multiplier", ref multiplier, 0.5f, 10.0f, "%.2f"))
         {
-            var isSelected = _plugin.Configuration.SelectedSpeedOption == i;
-            if (ImGui.RadioButton(OptionLabels[i], isSelected))
+            _plugin.Configuration.MovementSpeedMultiplier = multiplier;
+
+            // Only apply the change to the hook if the hack is currently enabled.
+            // If it's disabled, we just save the value for later.
+            if (_plugin.Configuration.EnableMovementSpeedHack)
             {
-                _plugin.Configuration.SelectedSpeedOption = i;
-                _plugin.Configuration.MovementSpeedMultiplier = Rates[i];
-                _plugin.Configuration.EnableMovementSpeedHack = true;
-                _plugin.Configuration.Save();
-                _plugin.ApplyMultiplier(Rates[i]);
+                _plugin.ApplyMultiplier(multiplier);
             }
-            ImGui.SameLine();
+
+            _plugin.Configuration.Save();
         }
+
+        // Display the current effective speed.
+        // If disabled, it should show 1.00x, otherwise the saved multiplier.
+        var effectiveSpeed = _plugin.Configuration.EnableMovementSpeedHack
+            ? _plugin.Configuration.MovementSpeedMultiplier
+            : 1.0f;
+
+        ImGui.Text($"Current effective speed: {effectiveSpeed:F2}x");
     }
 
     public void Dispose() { }

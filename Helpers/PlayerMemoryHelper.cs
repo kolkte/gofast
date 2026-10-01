@@ -7,7 +7,7 @@ public static class PlayerMemoryHelper
 {
     private static IntPtr _cachedBaseAddress = IntPtr.Zero;
     private static IntPtr _cachedSpeedAddress = IntPtr.Zero;
-    private static byte[] _readBuffer = new byte[4];
+    private static readonly byte[] _readBuffer = new byte[4];
     private static byte[] _writeBuffer = new byte[4];
 
     private static IntPtr GetSpeedAddress()
@@ -31,18 +31,26 @@ public static class PlayerMemoryHelper
     public static bool WriteMemAtPlayerSpeed(IntPtr hProcess, float speedRate)
     {
         if (hProcess == IntPtr.Zero) return false;
-        const float normalSpeed = 6.0f;
-        float target = speedRate * normalSpeed;
 
-        // Skip if the current value already matches (approximately).
-        if (Win32.ReadProcessMemory(hProcess, GetSpeedAddress(), _readBuffer, 4, out _))
-        {
-            float current = BitConverter.ToSingle(_readBuffer, 0);
-            if (Math.Abs(current - target) < 0.01f)
-                return true;
-        }
+        var speedAddress = GetSpeedAddress();
+
+        // Read the current value first so we don't spam writes when it already matches.
+        if (!Win32.ReadProcessMemory(hProcess, speedAddress, _readBuffer, 4, out _))
+            return false;
+
+        float current = BitConverter.ToSingle(_readBuffer, 0);
+        float target = 6.0f * speedRate;
+
+        // If the value is already at our target, do nothing.
+        if (Math.Abs(current - target) < 0.01f)
+            return true;
+
+        // Sanity check — if the value is absurdly high, the game may have just written
+        // something unrelated. Skip.
+        if (current > 100f)
+            return true;
 
         _writeBuffer = BitConverter.GetBytes(target);
-        return Win32.WriteProcessMemory(hProcess, GetSpeedAddress(), _writeBuffer, 4, out _);
+        return Win32.WriteProcessMemory(hProcess, speedAddress, _writeBuffer, 4, out _);
     }
 }

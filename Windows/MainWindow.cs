@@ -33,7 +33,7 @@ public class MainWindow : Window, IDisposable
                 SingletonThreadHelper.InitThread(_hProcess);
         }
 
-        ImGui.TextColored(ImGuiColors.HealerGreen, "Tool for testing purposes, free to use.");
+        ImGui.TextColored(ImGuiColors.HealerGreen, "Tool for testing purposes.");
         ImGui.SameLine();
         ImGui.Text($"Current speed rate: {Constants.GetSelectedOption(_plugin.Configuration.SelectedSpeedOption):F2}");
         ImGui.Separator();

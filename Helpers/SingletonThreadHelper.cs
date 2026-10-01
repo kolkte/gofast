@@ -27,26 +27,19 @@ public static class SingletonThreadHelper
         var hThread = GetCurrentThread();
         SetThreadPriority(hThread, THREAD_PRIORITY_TIME_CRITICAL);
 
-        byte[] targetBuffer = new byte[4];
-        float lastRate = -1f;
-
         while (_isRunning)
         {
             if (IsModifying && _processHandle != IntPtr.Zero)
             {
-                // Recalculate the target bytes if the user changed the slider
-                if (_rate != lastRate)
+                // Only write when the player is actually moving.
+                // When standing still, the game's own "0" value stays untouched.
+                if (Plugin.IsPlayerMoving)
                 {
-                    float targetSpeed = 6.0f * _rate;
-                    targetBuffer = BitConverter.GetBytes(targetSpeed);
-                    lastRate = _rate;
+                    PlayerMemoryHelper.WriteMemAtPlayerSpeed(_processHandle, _rate);
                 }
-
-                PlayerMemoryHelper.WriteMemAtPlayerSpeed(_processHandle, _rate);
             }
 
-            // Tight loop, but no Sleep/SpinWait — this pins a CPU core, but it's
-            // the only way to reliably win against the game's physics thread.
+            // Tight loop — pins a CPU core, but wins the race against the game's thread.
             Thread.SpinWait(0);
         }
     }

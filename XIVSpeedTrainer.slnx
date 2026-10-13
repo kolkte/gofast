@@ -3,7 +3,7 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="SpeedHook/SpeedHook.vcxproj" />
+  <Project Path="SpeedHook/SpeedHook.vcxproj" Id="14cafd54-b633-447a-957c-68db9f8b0831" />
   <Project Path="XIVSpeedTrainer.csproj">
     <Platform Project="x64" />
   </Project>

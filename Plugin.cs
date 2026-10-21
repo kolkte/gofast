@@ -20,7 +20,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public string Name => "XIVSpeedTrainer";
     private const string CommandName = "/movespeed";
-    private const long SpeedHookOffset = 0x182BC7F; // movss [rbx+44],xmm6
+    private const long SpeedHookOffset = 0x182C32F; // movss [rbx+44],xmm6
 
     public Configuration Configuration { get; init; }
     private bool _hookInitialized;

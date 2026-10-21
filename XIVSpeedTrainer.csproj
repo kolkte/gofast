@@ -9,7 +9,7 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<Version>0.0.0.2</Version>
+		<Version>0.0.0.3</Version>
 		<Author>kolkte</Author>
 		<Name>XIVSpeedTrainer</Name>
 		<Punchline>Movement speed trainer</Punchline>
